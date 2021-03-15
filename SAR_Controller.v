@@ -4,10 +4,10 @@ module SAR_Controller (
     input clk,
     input go,
     input cmp,
-    output valid,
+    output reg valid,
     output reg sample,
     output reg [7:0] result,
-    output [7:0] value,
+    output [7:0] value
 );
 
 parameter sWait = 2'b00;
@@ -16,63 +16,54 @@ parameter sConv = 2'b10;
 parameter sDone = 2'b11;
 
 
-reg [1:0] state; 
-reg [1:0] nextState;
+reg [1:0] currentState; 
 reg [7:0] mask; 
-reg [7:0] result; 
-
 
 always @(posedge clk) begin
-    if (!go) state <= sWait;
-    else state <= nextState;
-
-    if (go) begin
-        if (state == sConv) begin
-            if (cmp) result <= result | mask;
-            mask <= mask >> 1;
-        end else if (currentState != sDone) 
-            mask <= 8'b1000_0000;
+    if (!go) begin 
+        currentState <= sWait;
+        valid = 0;
+        sample = 0;
     end
     
-end
-
-
-always @(currentState or go or mask) begin
-    if (!go) begin 
-        state <= sWait;
-        valid <= 0;
-        sample <= 0;
-    end
-
-    case(state) 
+    case(currentState) 
         sWait: begin
-            if (go) nextState <= sSample;
+            if (go) currentState <= sSample;
+            else if (!go) currentState <= sWait;
             sample <= 0;
         end 
 
         sSample: begin
-            if (go) nextState <= sConv;
-            else nextState <= sWait;
-            result <= 0;
-            sample <= 1;
+            if (go) begin 
+                currentState <= sConv;
+                mask <= 8'b10000000;
+                result <= 0;
+                sample <= 1;
+            end
+            
+            if (!go) currentState <= sWait;
         end
 
         sConv: begin 
             sample <= 0;
-            if (mask[0]) nextState <= sDone;
+            if (mask[0]) currentState <= sDone;
+            if (!go) currentState <= sWait;
+            if (cmp) result <= result | mask;
+            mask <= mask >> 1;
         end
 
         sDone: begin
             sample <= 0;
-            if (!go) nextState <= sWait;
             valid <= 1;
+            if (!go) currentState <= sWait;
+            
         end
     
     endcase
 
 end
 
-
+    assign value = result | mask;
 
 endmodule
 
